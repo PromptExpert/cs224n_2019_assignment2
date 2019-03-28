@@ -18,6 +18,8 @@ def sigmoid(x):
 
     ### YOUR CODE HERE
 
+    s = 1 / (1 + np.exp(-x))
+
     ### END YOUR CODE
 
     return s
@@ -57,6 +59,22 @@ def naiveSoftmaxLossAndGradient(
     ### Please use the provided softmax function (imported earlier in this file)
     ### This numerically stable implementation helps you avoid issues pertaining
     ### to integer overflow. 
+
+    #这里的outsideVectors不同于pdf里的U，pdf里的U每列是一个词向量，这里每行是一个词向量
+    #理由是test_word2vec中，dummy_vectors的shpae是(10,3)，一共五个词，前五行是V矩阵，后五行是U矩阵
+    #所以outsideVectors的shape是(V,N),V既是词向量矩阵，也是词表大小。N是词向量维度。
+    #centerWordVec是行向量
+    logits = np.matmul(outsideVectors, np.transpose(centerWordVec)) #shpae (V,)
+    y_bar  = softmax(logits)
+    yo_bar = y_bar[outsideWordIdx]
+    loss = -np.log(yo_bar)
+
+    V,N = outsideVectors.shape
+    y = np.zeros(V)
+    y[outsideWordIdx] = 1
+    
+    gradCenterVec = np.matmul(y_bar - y, outsideVectors) # shape(N,),必须与v_c一致
+    gradOutsideVecs = np.outer(y_bar-y, centerWordVec) # shape(V,N),必须与U一致
 
 
     ### END YOUR CODE
@@ -103,6 +121,22 @@ def negSamplingLossAndGradient(
     indices = [outsideWordIdx] + negSampleWordIndices
 
     ### YOUR CODE HERE
+    u_o = outsideVectors[outsideWordIdx] 
+ 
+    loss1 = -np.log(sigmoid(np.dot(u_o,centerWordVec)))
+    loss2 = -sum([np.log(sigmoid(-np.dot(outsideVectors[k],centerWordVec))) for k in negSampleWordIndices])
+    loss = loss1+loss2
+
+    score = np.dot(u_o,centerWordVec)
+    gradCenterVec = (sigmoid(score)-1)*u_o #shape (N,)
+    grad_u_o = (sigmoid(score)-1)*centerWordVec #shape (N,)
+    gradOutsideVecs = np.zeros(outsideVectors.shape)
+    gradOutsideVecs[outsideWordIdx] = grad_u_o 
+    for k in negSampleWordIndices:
+        score = np.dot(outsideVectors[k],centerWordVec)
+        gradOutsideVecs[k] = gradOutsideVecs[k] + (1-sigmoid(-score))*centerWordVec
+        gradCenterVec += (1-sigmoid(-score))*outsideVectors[k]
+
 
     ### Please use your implementation of sigmoid in here.
 
@@ -148,6 +182,14 @@ def skipgram(currentCenterWord, windowSize, outsideWords, word2Ind,
     gradOutsideVectors = np.zeros(outsideVectors.shape)
 
     ### YOUR CODE HERE
+    centerWordId = word2Ind[currentCenterWord]
+    centerWordVec = centerWordVectors[centerWordId]
+    for ow in outsideWords:
+        owi = word2Ind[ow]
+        l, gradc,grado = word2vecLossAndGradient(centerWordVec,owi,outsideVectors,dataset)
+        loss += l 
+        gradCenterVecs[centerWordId] += gradc
+        gradOutsideVectors += grado
 
     ### END YOUR CODE
 
